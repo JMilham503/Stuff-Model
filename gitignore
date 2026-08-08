@@ -1,0 +1,13 @@
+# Data files - large, easily regenerated via pull_full_season.py, never commit
+sample_week.csv
+season_chunks/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
