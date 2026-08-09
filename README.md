@@ -149,6 +149,79 @@ deliberately excluded to keep this a shape-only metric.
 | CU | 7,176 | 37.4% | 0.5581 | release_speed |
 | FS | 4,223 | 35.6% | 0.5371 | release_speed |
 
+## Composite Stuff+
+
+The three sub-models above are combined into a single expected-value-per-pitch
+score, the way real "+" pitch models work: predict the probability of each
+outcome, weight each by its real run value, and sum. Two branch points aren't
+modeled per-pitch (ball vs. called strike, foul vs. ball in play) since both
+require pitch location, which this project deliberately excludes — those use
+each pitch type's empirical rate instead. Everywhere a real per-pitch model
+exists (swing, whiff, hard-hit probability), the composite uses that model's
+actual prediction.
+
+Outcome values are computed directly from this project's own data (the true
+average `delta_run_exp` per outcome type, per pitch type) rather than
+published linear weight constants, keeping the model self-consistent with the
+season it's built on:
+
+| Pitch | v_take | v_whiff | v_foul | v_hardhit | v_weakhit |
+|---|---|---|---|---|---|
+| FF | 0.0188 | -0.1156 | -0.0397 | 0.2275 | -0.0901 |
+| SI | 0.0105 | -0.1024 | -0.0435 | 0.1550 | -0.0892 |
+| SL | 0.0223 | -0.1112 | -0.0365 | 0.2764 | -0.0723 |
+| CH | 0.0327 | -0.1104 | -0.0374 | 0.2470 | -0.0699 |
+| ST | 0.0166 | -0.1181 | -0.0329 | 0.3240 | -0.0572 |
+| FC | 0.0212 | -0.1009 | -0.0436 | 0.2585 | -0.0951 |
+| CU | 0.0166 | -0.1206 | -0.0321 | 0.3034 | -0.0524 |
+| FS | 0.0327 | -0.1222 | -0.0349 | 0.2775 | -0.0689 |
+| KC | 0.0189 | -0.1246 | -0.0330 | 0.2963 | -0.0396 |
+| SV | 0.0169 | -0.1261 | -0.0323 | 0.3253 | -0.0480 |
+
+The sign of every value holds across all ten pitch types with no exceptions —
+whiffs and weak contact are always good for the pitcher, hard-hit balls and
+takes are always good for the hitter — a real check on the derivation, not
+an assumption. Worth noting: sinkers have by far the lowest hard-hit value
+(0.1550) of any pitch type, while sweepers and slurves have the highest
+(0.3240, 0.3253) — consistent with real scouting logic, since even a
+hard-hit sinker tends to stay on the ground, while a hard-hit breaking ball
+is usually a mistake pitch that gets fully punished.
+
+### Composite leaderboard (top 20, minimum 50 pitches)
+
+| Pitcher | Pitch | n | Stuff+ |
+|---|---|---|---|
+| Chapman, Aroldis | SI | 313 | 143.5 |
+| Hader, Josh | SI | 472 | 141.1 |
+| Maton, Phil | CU | 388 | 133.5 |
+| Rogers, Tyler | SI | 733 | 127.9 |
+| Suarez, Robert | SI | 137 | 124.0 |
+| Bautista, Félix | SI | 386 | 123.2 |
+| Megill, Trevor | FF | 468 | 120.9 |
+| Helsley, Ryan | FF | 458 | 120.8 |
+| Chapman, Aroldis | FF | 367 | 120.7 |
+| Stephenson, Robert | FC | 108 | 120.5 |
+| Ashcraft, Graham | SL | 480 | 119.9 |
+| Gilbert, Logan | FS | 420 | 119.8 |
+| Montgomery, Mason | FF | 580 | 119.7 |
+| Burns, Chase | SL | 258 | 119.6 |
+| Scott, Tanner | FF | 484 | 119.5 |
+| Leahy, Kyle | ST | 187 | 119.5 |
+| Miller, Mason | FF | 522 | 118.2 |
+| Estrada, Jeremiah | FF | 706 | 118.2 |
+| Sánchez, Cristopher | CH | 1096 | 118.2 |
+| McLean, Nolan | CU | 117 | 118.0 |
+
+Validation notes: several names appear on both this leaderboard and the
+earlier Whiff+-only leaderboard, built through a completely different
+combination path — Cristopher Sánchez's changeup, Logan Gilbert's splitter,
+Mason Montgomery's fastball, Félix Bautista's sinker. Two different models
+independently converging on the same names is stronger evidence than either
+leaderboard alone. Tyler Rogers' appearance at #4 is a particularly clean,
+explainable result: his well-known submarine arm slot shows up directly in
+`release_pos_z`, one of the model's actual features, without the model ever
+being told anything about his delivery specifically.
+
 ## Turning probability into a grade
 
 Whiff probabilities are converted to a scaled grade the same way real "+"
@@ -202,19 +275,27 @@ actually measuring something real.
 - Cutters are the consistently hardest pitch type to grade from shape
   alone across all three sub-models, though full-season data closed part
   of that gap.
+- The composite score and the standalone Whiff+ model, built through
+  different combination paths, independently agree on several of the same
+  top names (Sánchez's changeup, Gilbert's splitter, Bautista's sinker).
+  Two different methods landing on the same answer is stronger evidence
+  than either result alone.
 
 ## Honest limitations
 
-- **This is Whiff+, Swing+, and Contact+ — not a unified Stuff+ yet.** The
-  three components haven't been combined into a single composite score.
+- **Two branch points in the composite score still use pitch-type averages,
+  not per-pitch predictions** — whether a take is a ball or called strike,
+  and whether contact is a foul or ball in play. Both require pitch
+  location, which this project deliberately excludes. Closing this gap is
+  the called-strike model listed below.
 - **Swing probability is missing its biggest real driver (location) by
   design**, which caps how predictive that component can be on its own.
 - **Sample sizes for rarer pitch types remain modest** even at a full
   season (e.g., KC and SV), especially for the contact-quality model,
   where ball-in-play events are a smaller slice of total pitches.
-- **This does not yet account for called-strike probability**, batter
-  handedness, or pitch sequencing — all real components of a full pitch
-  value framework.
+- **Batter handedness and pitch sequencing** aren't modeled either — both
+  real components of a full pitch value framework, and both natural
+  extensions once a called-strike model closes the location gap.
 
 ## Tech stack
 
@@ -222,10 +303,44 @@ actually measuring something real.
 - **Modeling:** `scikit-learn`, `xgboost`
 - **Data processing:** `pandas`
 
+## Repository structure
+
+```
+.
+├── README.md
+├── pull_full_season.py             # Pulls full-season Statcast data via pybaseball
+├── build_whiff_model_by_type.py    # Sub-model 1: whiff probability given a swing
+├── build_swing_model.py            # Sub-model 2: swing probability given a pitch
+├── build_contact_quality_model.py  # Sub-model 3: hard-hit probability given contact
+├── build_composite_stuff_score.py  # Combines all three sub-models into one Stuff+ score
+├── player_stuff_plus_grades.csv    # Composite leaderboard output - small enough to commit directly
+└── .gitignore                      # Excludes sample_week.csv, season_chunks/, and scored_pitches_composite.csv
+```
+
+Note: `sample_week.csv` (the pulled Statcast data) and the `season_chunks/`
+folder are intentionally not tracked in this repo — they're large, easily
+regenerated, and not something you want bloating a git history. Run
+`pull_full_season.py` locally to produce them.
+
+## How to run
+
+```bash
+pip install pandas xgboost scikit-learn pybaseball
+
+# 1. Pull the data (takes 20-40+ minutes, resumable if interrupted)
+python pull_full_season.py
+
+# 2. Run each sub-model independently - all read the same sample_week.csv
+python build_whiff_model_by_type.py
+python build_swing_model.py
+python build_contact_quality_model.py
+
+# 3. Combine all three into one composite score (run this last)
+python build_composite_stuff_score.py
+```
+
 ## Future work
 
-- Combine the three sub-models into a single composite Stuff+ score using
-  run-value weights per outcome
 - Add a called-strike probability model to complete the decomposition
 - Extend to a Location+/Pitching+ version that incorporates pitch location
 - Automate ingestion on a scheduled cadence and expose grades via an API
